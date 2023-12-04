@@ -13,11 +13,13 @@ import csv
 #GLOBAL CONSTANT
 CHROME_PATH_LOCAL_STATE = os.path.normpath(r"%s\AppData\Local\Google\Chrome\User Data\Local State"%(os.environ['USERPROFILE']))
 CHROME_PATH = os.path.normpath(r"%s\AppData\Local\Google\Chrome\User Data"%(os.environ['USERPROFILE']))
+EDGE_PATH_LOCAL_STATE = os.path.normpath(r"%s\AppData\Local\Microsoft\Edge\User Data\Local State"%(os.environ['USERPROFILE']))
+EDGE_PATH = os.path.normpath(r"%s\AppData\Local\Microsoft\Edge\User Data"%(os.environ['USERPROFILE']))
 
-def get_secret_key():
+def get_secret_key(state: str):
     try:
         #(1) Get secretkey from chrome local state
-        with open( CHROME_PATH_LOCAL_STATE, "r", encoding='utf-8') as f:
+        with open(state, "r", encoding='utf-8') as f:
             local_state = f.read()
             local_state = json.loads(local_state)
         secret_key = base64.b64decode(local_state["os_crypt"]["encrypted_key"])
@@ -62,20 +64,20 @@ def get_db_connection(chrome_path_login_db):
         print("%s"%str(e))
         print("[ERR] Chrome database cannot be found")
         return None
-        
-if __name__ == '__main__':
+    
+def decrypt_password(output: str, path: str, state: str):
     try:
         #Create Dataframe to store passwords
-        with open('decrypted_password.csv', mode='w', newline='', encoding='utf-8') as decrypt_password_file:
+        with open(output, mode='w', newline='', encoding='utf-8') as decrypt_password_file:
             csv_writer = csv.writer(decrypt_password_file, delimiter=',')
             csv_writer.writerow(["index","url","username","password"])
             #(1) Get secret key
-            secret_key = get_secret_key()
+            secret_key = get_secret_key(state)
             #Search user profile or default folder (this is where the encrypted login password is stored)
-            folders = [element for element in os.listdir(CHROME_PATH) if re.search("^Profile*|^Default$",element)!=None]
+            folders = [element for element in os.listdir(path) if re.search("^Profile*|^Default$",element)!=None]
             for folder in folders:
             	#(2) Get ciphertext from sqlite database
-                chrome_path_login_db = os.path.normpath(r"%s\%s\Login Data"%(CHROME_PATH,folder))
+                chrome_path_login_db = os.path.normpath(r"%s\%s\Login Data"%(path,folder))
                 conn = get_db_connection(chrome_path_login_db)
                 if(secret_key and conn):
                     cursor = conn.cursor()
@@ -100,3 +102,7 @@ if __name__ == '__main__':
                     os.remove("Loginvault.db")
     except Exception as e:
         print("[ERR] %s"%str(e))
+        
+if __name__ == '__main__':
+    decrypt_password("chrome_decrypted_output.csv", CHROME_PATH, CHROME_PATH_LOCAL_STATE)
+    decrypt_password("edge_decrypted_output.csv", EDGE_PATH, EDGE_PATH_LOCAL_STATE)
